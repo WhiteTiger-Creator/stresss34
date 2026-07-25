@@ -1,0 +1,8 @@
+{
+  "primary_summary_sha256": "8ae4cfa3d07d1843b2af835b613c2f96ceb40454f359478c93c8004808bbb63b",
+  "primary_windows_sha256": "2114f573681da687330ae2b134029c5cc25d6222d213c213adc9b75cec3de11a",
+  "primary_queue_sha256": "2677e834cd1a8e065d25416a046a17ba6cb243d1cd12ca853acafa4c91c85d1d",
+  "alternate_summary_sha256": "e53bc0b7166a0cbbe5ecd144b1ef35bbd4e303acdbaf2a972705f5412872e15d",
+  "alternate_windows_sha256": "429b9fd05fdc570ab933557a9118046c04727a0019d0d9a785744b89d25799f0",
+  "alternate_queue_sha256": "3ba6e703a971e90f5e92ab520aada47b25fc5e973de6e72f77ae441299312d54"
+}
