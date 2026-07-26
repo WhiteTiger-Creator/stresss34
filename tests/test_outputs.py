@@ -730,11 +730,26 @@ def test_sparse_policy_and_override_inherit_complete_defaults():
             assert result.returncode == 0, result.stderr
             summary = _load_json(out / "rollup_summary.json")
             queue = _load_jsonl(out / "alert_queue.jsonl")
-            assert len(summary["policy_checksum"]) == 64
+            # The default block sets only suppress_unit_ms, so every other field must
+            # fall through to the MET-2221 baseline. Each non-overridden service must
+            # inherit queue_min_effective_ms = 234, while the auth override still applies.
+            assert any(row["service"] != "auth" for row in queue), "need a non-auth row"
+            assert all(
+                row["policy_queue_min_ms"] == 234
+                for row in queue
+                if row["service"] != "auth"
+            ), "non-overridden services must inherit the 234 queue default"
             assert all(
                 row["policy_queue_min_ms"] == 205
                 for row in queue
                 if row["service"] == "auth"
+            )
+            # The policy checksum pins the whole resolved policy, including the inherited
+            # score thresholds score_threshold_critical = 38 and score_threshold_high = 24;
+            # an implementation that falls back to 34/18 produces a different digest.
+            assert len(summary["policy_checksum"]) == 64
+            assert summary["policy_checksum"] == (
+                "25ff89f46313b48722186321250ab6205ecaa3b6e3b648a45c70b49d2ad90fc5"
             )
     finally:
         POLICY_PATH.write_text(original)

@@ -19,9 +19,7 @@ COPY app/ /app/
 RUN cp /app/workflow/metric_rollup.py /app/workflow/.metric_rollup.original \
     && chmod a-w /app/workflow/.metric_rollup.original
 
-# Operational wiring left behind by the failed pager-policy rollout:
-# a non-executable wrapper pointing at a path that no longer exists, a stale
-# compile lock, no schedule entry, and a world-writable output directory.
+# Host state left behind by the failed pager-policy rollout.
 RUN printf '#!/bin/sh\nexec python3 /app/workflow/metric_rollup.py.legacy "$@"\n' > /usr/local/bin/rollup-metrics \
     && chmod 0644 /usr/local/bin/rollup-metrics \
     && mkdir -p /var/lock \
@@ -30,9 +28,7 @@ RUN printf '#!/bin/sh\nexec python3 /app/workflow/metric_rollup.py.legacy "$@"\n
     && mkdir -p /app/output \
     && chmod 0777 /app/output
 
-# Log wiring the rollout also left wrong: the compile log directory is world-writable
-# and still root-owned, its rotation drop-in was never installed, and an unrotated
-# leftover from the crashed run is still sitting in the directory.
+# Additional host state left behind by the rollout.
 RUN mkdir -p /var/log/metrics-rollup \
     && chmod 0777 /var/log/metrics-rollup \
     && printf 'rollout 4711 aborted mid-compile\n' > /var/log/metrics-rollup/compile.log.0 \

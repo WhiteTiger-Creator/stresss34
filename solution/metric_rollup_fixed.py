@@ -23,7 +23,7 @@ SERVICE_ALIASES = {
     "search-api": "search",
 }
 DEFAULT_POLICY = {
-    "queue_min_effective_ms": 220,
+    "queue_min_effective_ms": 234,
     "critical_p1_min_ms": 280,
     "critical_threshold_ms": 650,
     "high_threshold_ms": 320,
@@ -32,8 +32,8 @@ DEFAULT_POLICY = {
     "no_overlap_bonus": 4,
     "segment_bonus": 1,
     "severity_weight": {"critical": 5, "major": 3, "minor": 1},
-    "score_threshold_critical": 34,
-    "score_threshold_high": 18,
+    "score_threshold_critical": 38,
+    "score_threshold_high": 24,
     "suppress_penalty_ms": 40,
     "boost_credit_ms": 30,
     "suppress_unit_ms": 50,
