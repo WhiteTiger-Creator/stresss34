@@ -441,7 +441,7 @@
   "guardrails": {
     "original_snapshot_path": "/app/workflow/.metric_rollup.original",
     "tests_tree_access": "forbidden",
-    "source_token_rule": "the repaired source code, including comments and docstrings, must not contain /tests, expected_outputs.json, or test_outputs.py; runtime reads/imports from the test tree are also forbidden"
+    "source_token_rule": "the repaired source must compute every value at runtime from the declared input samples and the fixed source files; it must not embed or copy precomputed results, and it must not read from, import, or reference the grading harness in any form"
   },
   "semantics_source": {
     "notes": "This document is the output contract only: file paths, schemas, exact key sets, identifier payloads and checksum encodings. It does NOT define how values are derived.",

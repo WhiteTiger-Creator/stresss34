@@ -7,6 +7,7 @@ RUN apt-get update \
         tmux \
         asciinema \
         cron \
+        logrotate \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.lock /tmp/requirements.lock

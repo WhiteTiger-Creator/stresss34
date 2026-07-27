@@ -207,308 +207,6 @@ def test_alternate_input_exact_fixture():
         ]
 
 
-def test_summary_schema_and_order(summary: dict):
-    """rollup_summary.json carries exactly the contract keys with required orderings."""
-    assert set(summary.keys()) == {
-        "schema_version",
-        "raw_sample_count",
-        "unique_sample_ids",
-        "canonical_sample_count",
-        "service_count",
-        "severity_counts",
-        "total_unplanned_disruption_ms",
-        "total_maintenance_overlap_ms",
-        "total_maintenance_span_count",
-        "total_suppression_overlap_ms",
-        "total_boost_overlap_ms",
-        "total_handoff_overlap_ms",
-        "total_handoff_segment_count",
-        "total_blackout_overlap_ms",
-        "total_blackout_segment_count",
-        "total_degrade_overlap_ms",
-        "total_degrade_segment_count",
-        "total_billable_disruption_ms",
-        "total_adjusted_billable_disruption_ms",
-        "total_routed_billable_disruption_ms",
-        "total_dispatchable_billable_disruption_ms",
-        "total_debt_adjusted_dispatchable_disruption_ms",
-        "longest_window_ms",
-        "queued_window_count",
-        "priority_counts",
-        "max_escalation_score",
-        "max_exception_balance_score",
-        "max_handoff_pressure_score",
-        "max_blackout_pressure_score",
-        "max_degrade_pressure_score",
-        "max_debt_pressure_score",
-        "max_debt_out_ms",
-        "max_risk_vector",
-        "planned_excluded_count",
-        "critical_window_count",
-        "canonical_input_checksum",
-        "queue_signature_checksum",
-        "maintenance_compaction_checksum",
-        "exception_compaction_checksum",
-        "handoff_compaction_checksum",
-        "blackout_compaction_checksum",
-        "degrade_compaction_checksum",
-        "queue_digest_checksum",
-        "policy_checksum",
-    }
-    assert summary["schema_version"] == "rollup-windows-v1"
-    assert list(summary["severity_counts"].keys()) == list(SEVERITY_ORDER)
-    assert list(summary["priority_counts"].keys()) == list(PRIORITY_ORDER)
-    assert len(summary["canonical_input_checksum"]) == 64
-    assert len(summary["queue_signature_checksum"]) == 64
-    assert len(summary["maintenance_compaction_checksum"]) == 64
-    assert len(summary["exception_compaction_checksum"]) == 64
-    assert len(summary["handoff_compaction_checksum"]) == 64
-    assert len(summary["blackout_compaction_checksum"]) == 64
-    assert len(summary["degrade_compaction_checksum"]) == 64
-    assert len(summary["queue_digest_checksum"]) == 64
-    assert len(summary["policy_checksum"]) == 64
-
-
-def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
-    """gap_windows.json is a service-keyed map of sorted window rows with exact keys."""
-    expected_keys = {
-        "start_ms",
-        "end_ms",
-        "duration_ms",
-        "maintenance_overlap_ms",
-        "maintenance_span_count",
-        "suppression_overlap_ms",
-        "boost_overlap_ms",
-        "billable_duration_ms",
-        "handoff_overlap_ms",
-        "handoff_segment_count",
-        "adjusted_billable_duration_ms",
-        "blackout_overlap_ms",
-        "blackout_segment_count",
-        "routed_billable_duration_ms",
-        "degrade_overlap_ms",
-        "degrade_segment_count",
-        "dispatchable_billable_duration_ms",
-        "idle_gap_ms",
-        "debt_in_ms",
-        "debt_out_ms",
-        "debt_adjusted_dispatchable_ms",
-        "sample_count",
-        "critical_sample_count",
-        "source_sample_ids",
-        "max_severity",
-        "window_signature",
-    }
-    assert list(windows.keys()) == sorted(windows.keys())
-    for blocks in windows.values():
-        starts = [b["start_ms"] for b in blocks]
-        assert starts == sorted(starts)
-        for block in blocks:
-            assert set(block.keys()) == expected_keys
-            assert block["duration_ms"] == block["end_ms"] - block["start_ms"]
-            assert block["billable_duration_ms"] == max(
-                block["duration_ms"] - block["maintenance_overlap_ms"], 0
-            )
-            # Handoff attenuation rounds UP per MET-2252.
-            assert block["adjusted_billable_duration_ms"] == max(
-                block["billable_duration_ms"] - (-(-block["handoff_overlap_ms"] // 2)),
-                0,
-            )
-            # Blackout attenuation rounds UP per MET-2254; degrade below stays floored.
-            assert block["routed_billable_duration_ms"] == max(
-                block["adjusted_billable_duration_ms"] - (-(-block["blackout_overlap_ms"] // 3)),
-                0,
-            )
-            assert block["dispatchable_billable_duration_ms"] == max(
-                block["routed_billable_duration_ms"] - (block["degrade_overlap_ms"] // 4),
-                0,
-            )
-            # Debt credit rounds UP per MET-2242; the layer divisors above stay floored.
-            assert block["debt_adjusted_dispatchable_ms"] == (
-                block["dispatchable_billable_duration_ms"]
-                + (-(-block["debt_in_ms"] // 5))
-            )
-            assert block["debt_out_ms"] >= block["debt_in_ms"]
-            assert block["source_sample_ids"] == sorted(block["source_sample_ids"])
-            assert isinstance(block["source_sample_ids"], list)
-            assert all(isinstance(value, str) for value in block["source_sample_ids"])
-
-
-def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
-    """Queue rows carry exactly the required fields with valid identifier lengths."""
-    expected = {
-        "window_id",
-        "service",
-        "start_ms",
-        "end_ms",
-        "duration_ms",
-        "maintenance_overlap_ms",
-        "maintenance_span_count",
-        "suppression_overlap_ms",
-        "boost_overlap_ms",
-        "billable_duration_ms",
-        "handoff_overlap_ms",
-        "handoff_segment_count",
-        "adjusted_billable_duration_ms",
-        "blackout_overlap_ms",
-        "blackout_segment_count",
-        "routed_billable_duration_ms",
-        "degrade_overlap_ms",
-        "degrade_segment_count",
-        "dispatchable_billable_duration_ms",
-        "debt_in_ms",
-        "debt_out_ms",
-        "debt_adjusted_dispatchable_ms",
-        "sample_count",
-        "critical_sample_count",
-        "source_sample_ids",
-        "max_severity",
-        "window_signature",
-        "policy_profile",
-        "policy_queue_min_ms",
-        "effective_queue_min_ms",
-        "adjusted_queue_min_ms",
-        "routed_queue_min_ms",
-        "dispatch_queue_min_ms",
-        "exception_balance_score",
-        "handoff_pressure_score",
-        "blackout_pressure_score",
-        "degrade_pressure_score",
-        "debt_pressure_score",
-        "escalation_score",
-        "risk_vector",
-        "priority",
-        "sample_signature",
-        "queue_digest",
-    }
-    for row in queue_rows:
-        assert set(row.keys()) == expected
-        assert row["priority"] in PRIORITY_ORDER
-        assert len(row["window_signature"]) == 10
-        assert len(row["sample_signature"]) == 12
-        assert len(row["queue_digest"]) == 10
-
-
-def test_priority_rules_are_enforced(queue_rows: list[dict]):
-    """Queue priorities follow the decided critical/high/medium rules."""
-    for row in queue_rows:
-        assert row["debt_adjusted_dispatchable_ms"] >= row["dispatch_queue_min_ms"]
-        assert row["dispatch_queue_min_ms"] >= row["routed_queue_min_ms"]
-        assert row["routed_queue_min_ms"] >= row["adjusted_queue_min_ms"]
-        assert row["adjusted_queue_min_ms"] >= row["effective_queue_min_ms"]
-        assert row["effective_queue_min_ms"] >= 0
-        assert row["policy_profile"] in {"default", "auth", "billing", "search"}
-        assert isinstance(row["exception_balance_score"], int)
-        assert isinstance(row["handoff_pressure_score"], int)
-        assert isinstance(row["blackout_pressure_score"], int)
-        assert isinstance(row["degrade_pressure_score"], int)
-        assert isinstance(row["debt_pressure_score"], int)
-        assert isinstance(row["risk_vector"], int)
-
-
-def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
-    """The queue is ordered by the full decided tie-break sequence."""
-    rank = {name: i for i, name in enumerate(PRIORITY_ORDER)}
-    sort_keys = [
-        (
-            rank[row["priority"]],
-            -row["escalation_score"],
-            -row["handoff_pressure_score"],
-            -row["blackout_pressure_score"],
-            -row["degrade_pressure_score"],
-            -row["debt_pressure_score"],
-            -row["risk_vector"],
-            -row["exception_balance_score"],
-            -row["dispatchable_billable_duration_ms"],
-            -row["routed_billable_duration_ms"],
-            -row["adjusted_billable_duration_ms"],
-            -row["critical_sample_count"],
-            -row["maintenance_span_count"],
-            -row["sample_count"],
-            row["service"],
-            row["start_ms"],
-        )
-        for row in queue_rows
-    ]
-    assert sort_keys == sorted(sort_keys)
-
-
-def test_jsonl_compact_format():
-    """alert_queue.jsonl uses compact JSON separators."""
-    for line in QUEUE_PATH.read_text().splitlines():
-        if not line.strip():
-            continue
-        parsed = json.loads(line)
-        assert ": " not in line
-        assert json.dumps(parsed, separators=(",", ":")) == line
-
-
-def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dict]]):
-    """Window arithmetic stays internally consistent across attenuation layers."""
-    total_duration = sum(b["duration_ms"] for blocks in windows.values() for b in blocks)
-    total_overlap = sum(b["maintenance_overlap_ms"] for blocks in windows.values() for b in blocks)
-    total_spans = sum(b["maintenance_span_count"] for blocks in windows.values() for b in blocks)
-    total_suppression = sum(b["suppression_overlap_ms"] for blocks in windows.values() for b in blocks)
-    total_boost = sum(b["boost_overlap_ms"] for blocks in windows.values() for b in blocks)
-    total_handoff = sum(b["handoff_overlap_ms"] for blocks in windows.values() for b in blocks)
-    total_handoff_segments = sum(
-        b["handoff_segment_count"] for blocks in windows.values() for b in blocks
-    )
-    total_blackout = sum(b["blackout_overlap_ms"] for blocks in windows.values() for b in blocks)
-    total_blackout_segments = sum(
-        b["blackout_segment_count"] for blocks in windows.values() for b in blocks
-    )
-    total_degrade = sum(b["degrade_overlap_ms"] for blocks in windows.values() for b in blocks)
-    total_degrade_segments = sum(
-        b["degrade_segment_count"] for blocks in windows.values() for b in blocks
-    )
-    total_billable = sum(b["billable_duration_ms"] for blocks in windows.values() for b in blocks)
-    total_adjusted_billable = sum(
-        b["adjusted_billable_duration_ms"] for blocks in windows.values() for b in blocks
-    )
-    total_routed_billable = sum(
-        b["routed_billable_duration_ms"] for blocks in windows.values() for b in blocks
-    )
-    total_dispatchable_billable = sum(
-        b["dispatchable_billable_duration_ms"] for blocks in windows.values() for b in blocks
-    )
-    total_debt_adjusted_dispatchable = sum(
-        b["debt_adjusted_dispatchable_ms"] for blocks in windows.values() for b in blocks
-    )
-    assert summary["total_unplanned_disruption_ms"] == total_duration
-    assert summary["total_maintenance_overlap_ms"] == total_overlap
-    assert summary["total_maintenance_span_count"] == total_spans
-    assert summary["total_suppression_overlap_ms"] == total_suppression
-    assert summary["total_boost_overlap_ms"] == total_boost
-    assert summary["total_handoff_overlap_ms"] == total_handoff
-    assert summary["total_handoff_segment_count"] == total_handoff_segments
-    assert summary["total_blackout_overlap_ms"] == total_blackout
-    assert summary["total_blackout_segment_count"] == total_blackout_segments
-    assert summary["total_degrade_overlap_ms"] == total_degrade
-    assert summary["total_degrade_segment_count"] == total_degrade_segments
-    assert summary["total_billable_disruption_ms"] == total_billable
-    assert summary["total_adjusted_billable_disruption_ms"] == total_adjusted_billable
-    assert summary["total_routed_billable_disruption_ms"] == total_routed_billable
-    assert summary["total_dispatchable_billable_disruption_ms"] == total_dispatchable_billable
-    assert (
-        summary["total_debt_adjusted_dispatchable_disruption_ms"]
-        == total_debt_adjusted_dispatchable
-    )
-
-
-def test_checksum_fields_match_fixture(summary: dict):
-    """Summary checksum fields match canonical values."""
-    assert len(summary["canonical_input_checksum"]) == 64
-    assert len(summary["queue_signature_checksum"]) == 64
-    assert len(summary["maintenance_compaction_checksum"]) == 64
-    assert len(summary["exception_compaction_checksum"]) == 64
-    assert len(summary["handoff_compaction_checksum"]) == 64
-    assert len(summary["blackout_compaction_checksum"]) == 64
-    assert len(summary["degrade_compaction_checksum"]) == 64
-    assert len(summary["queue_digest_checksum"]) == 64
-    assert len(summary["policy_checksum"]) == 64
-
-
 def test_original_snapshot_preserved():
     """The frozen broken compiler snapshot is untouched."""
     assert ORIGINAL_PIPELINE.exists()
@@ -1453,7 +1151,6 @@ def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
         DEGRADE_PATH.write_text(original_degrade)
 
 
-
 WRAPPER_PATH = Path("/usr/local/bin/rollup-metrics")
 LOCK_PATH = Path("/var/lock/metrics-rollup.lock")
 CRON_PATH = Path("/etc/cron.d/metrics-rollup")
@@ -1469,6 +1166,7 @@ def test_service_account_provisioned():
 
     entry = pwd.getpwnam("svc-metrics")
     assert entry.pw_shell in ("/usr/sbin/nologin", "/sbin/nologin", "/bin/false")
+    assert entry.pw_uid < 1000, "svc-metrics must be a system account (uid < 1000)"
 
 
 def test_stale_compile_lock_cleared():
@@ -1597,3 +1295,75 @@ def test_logrotate_dropin_installed():
     for directive in ("daily", "rotate 14", "compress", "missingok", "notifempty",
                       "su svc-metrics svc-metrics", "create 0640 svc-metrics svc-metrics"):
         assert directive in text, f"logrotate drop-in missing required directive: {directive}"
+
+
+def test_logrotate_rotates_as_service_account(tmp_path_factory):
+    """logrotate actually rotates the compile log, and the recreated log stays owned by
+    svc-metrics at mode 0640 -- i.e. rotation runs as the service account, not as root.
+
+    Forces a rotation with the installed drop-in and checks a rotated artifact appears and
+    that the recreated live log follows the `create 0640 svc-metrics svc-metrics` directive.
+    """
+    import pwd
+
+    svc = pwd.getpwnam("svc-metrics")
+    log_dir = Path("/var/log/metrics-rollup")
+    live = log_dir / "compile.log"
+    live.write_text("a log line so notifempty allows rotation\n")
+    shutil.chown(live, user="svc-metrics", group="svc-metrics")
+    before = set(log_dir.glob("compile.log.*"))
+    state = tmp_path_factory.mktemp("lrstate") / "status"
+    result = subprocess.run(  # noqa: PLW1510
+        ["logrotate", "--force", "--state", str(state), "/etc/logrotate.d/metrics-rollup"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    rotated = set(log_dir.glob("compile.log.*")) - before
+    assert rotated, "logrotate produced no rotated file; rotation is not functional"
+    info = live.stat()
+    assert info.st_uid == svc.pw_uid and info.st_gid == svc.pw_gid, (
+        "recreated live log not owned by svc-metrics; rotation did not run as the service account"
+    )
+    assert (info.st_mode & 0o777) == 0o640, "recreated live log not mode 0640 per create directive"
+
+
+def test_scheduled_compile_runs_end_to_end_as_service_account():
+    """The scheduled path -- the wrapper invoked as svc-metrics with the cron job's args --
+    produces the exact contract outputs, proving the recovered host and the repaired service
+    work together end to end under the service account rather than as root.
+    """
+    # Create the output dir directly under world-traversable /tmp so svc-metrics can reach it
+    # (pytest's tmp_path_factory roots are root-owned 0700 and block a non-root traversal).
+    out = Path(tempfile.mkdtemp(prefix="scheduled_out_"))
+    shutil.chown(out, user="svc-metrics", group="svc-metrics")
+    os.chmod(out, 0o750)
+    result = subprocess.run(  # noqa: PLW1510
+        [str(WRAPPER_PATH), "--input", str(INPUT_PATH), "--output-dir", str(out)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        user="svc-metrics",
+        group="svc-metrics",
+    )
+    assert result.returncode == 0, result.stderr
+    assert _stable_json_hash(_load_json(out / "rollup_summary.json")) == FIXTURE[
+        "primary_summary_sha256"
+    ]
+    assert _stable_json_hash(_load_json(out / "gap_windows.json")) == FIXTURE[
+        "primary_windows_sha256"
+    ]
+    assert _stable_jsonl_hash(_load_jsonl(out / "alert_queue.jsonl")) == FIXTURE[
+        "primary_queue_sha256"
+    ]
+
+
+def test_wrapper_does_not_drop_privileges():
+    """The wrapper runs the compiler as the invoking user: selecting the svc-metrics identity
+    is the cron drop-in's job, so the wrapper itself must not switch user or drop privileges.
+    """
+    source = WRAPPER_PATH.read_text()
+    for token in ("su ", "sudo", "setpriv", "runuser", "setuid", "chpst", "gosu"):
+        assert token not in source, f"wrapper must not drop privileges (found {token!r})"
+
