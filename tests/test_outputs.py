@@ -1176,9 +1176,13 @@ def test_stale_compile_lock_cleared():
 
 def test_wrapper_installed_and_functional(tmp_path_factory):
     """The operator wrapper is executable, targets the live compiler, and runs it."""
+    import pwd
+
     assert WRAPPER_PATH.exists()
-    mode = WRAPPER_PATH.stat().st_mode
-    assert mode & 0o111, "wrapper must be executable"
+    info = WRAPPER_PATH.stat()
+    assert info.st_uid == pwd.getpwnam("root").pw_uid, "wrapper must be owned by root"
+    assert info.st_gid == pwd.getpwnam("root").pw_gid, "wrapper must be group root"
+    assert (info.st_mode & 0o777) == 0o755, "wrapper must be root-owned mode 0755, not 0777 or non-root"
     source = WRAPPER_PATH.read_text()
     assert ".legacy" not in source
     out_dir = tmp_path_factory.mktemp("wrapper_out")
@@ -1287,9 +1291,15 @@ def test_logrotate_dropin_installed():
     log glob, and must carry the su/create directives that keep rotated files owned by
     svc-metrics along with the documented retention and safety directives.
     """
+    import pwd
+
     dropin = Path("/etc/logrotate.d/metrics-rollup")
     assert dropin.exists(), "logrotate drop-in was never installed"
-    assert (dropin.stat().st_mode & 0o777) == 0o644, "logrotate drop-in must be mode 0644"
+    dinfo = dropin.stat()
+    assert dinfo.st_uid == pwd.getpwnam("root").pw_uid and dinfo.st_gid == pwd.getpwnam("root").pw_gid, (
+        "logrotate drop-in must be owned by root"
+    )
+    assert (dinfo.st_mode & 0o777) == 0o644, "logrotate drop-in must be mode 0644"
     text = dropin.read_text(encoding="utf-8")
     assert "/var/log/metrics-rollup/*.log" in text, "drop-in does not cover the compile log glob"
     for directive in ("daily", "rotate 14", "compress", "missingok", "notifempty",
