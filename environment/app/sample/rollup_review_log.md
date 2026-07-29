@@ -2447,3 +2447,38 @@ Nothing in this window altered thresholds, priority, or ordering; those remain g
 ### Review entry 0582 — search lane
 Shift lead logged routine rollout observation for search (north) during review window 0582. An audit pass matched queue artifacts against their recorded signatures; no mismatches were observed.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+## Worked examples — illustrative only (they restate the final governing rules and introduce nothing new)
+
+The rules below are already fixed by the ticketed decisions above; these traces use **invented inputs** to make the error-prone, mixed-rounding steps concrete so an implementation can be checked one step at a time. They add no rule and disclose no output value; each step cites the decision that governs it. In integer arithmetic `ceil(x/n) = -(-x // n)` and `floor(x/n) = x // n`.
+
+### A. Attenuation chain on a single sample window (MET-2216, as revised by MET-2252 and MET-2254)
+Inputs: `duration_ms=1000`, `maintenance_overlap_ms=120`, `handoff_overlap_ms=7`, `blackout_overlap_ms=10`, `degrade_overlap_ms=9`.
+- `billable_duration_ms              = max(1000 - 120, 0)         = 880`
+- `adjusted_billable_duration_ms     = max(880 - ceil(7/2), 0)   = max(880 - 4, 0) = 876`   — handoff ÷2 **ROUNDS UP** (MET-2252)
+- `routed_billable_duration_ms       = max(876 - ceil(10/3), 0)  = max(876 - 4, 0) = 872`   — blackout ÷3 **ROUNDS UP** (MET-2254)
+- `dispatchable_billable_duration_ms = max(872 - floor(9/4), 0)  = max(872 - 2, 0) = 870`   — degrade ÷4 stays **FLOORED** (MET-2254)
+
+### B. Debt ledger across a service's sample windows (MET-2219, as revised by MET-2236, MET-2242 and MET-2251)
+State is per normalized service; windows are processed in `start_ms` ascending order after all attenuation fields are final. The first window has `idle_gap_ms=0`, `debt_in_ms=0`. Take a later window **B** whose predecessor finalized `debt_out_ms=300`, with `idle_gap_ms=90`, `dispatchable_billable_duration_ms=500`, `maintenance_span_count=1`, `handoff_segment_count=2`, `blackout_segment_count=0`, `degrade_segment_count=1`:
+- `idle_gap 90 < 600`, so `debt_in_ms = max(300 - floor(90/3), 0) = max(300 - 30, 0) = 270`   — idle decay ÷3 **FLOOR** (MET-2219)
+- `debt_adjusted_dispatchable_ms = 500 + ceil(270/5) = 500 + 54 = 554`                        — debt credit ÷5 **ROUNDS UP** (MET-2242)
+- `debt_out_ms = min(270 + 500 + 1*12 + 2*20 + 0*25 + 1*15, 2500) = min(837, 2500) = 837`     — maintenance-span credit 12 (MET-2251); handoff/blackout/degrade segment credits 20/25/15 and the 2500 cap (MET-2219)
+
+Then a following window **C** with `idle_gap_ms=600`:
+- `idle_gap 600 >= 600`, so `debt_in_ms = 0` **outright** — the ÷3 decay does NOT apply; the ledger resets past the threshold (MET-2236).
+
+### C. Unit conversions (MET-2224, as revised by MET-2256)
+With `suppress_unit_ms=50`, `boost_unit_ms=50`, `handoff_unit_ms=60`:
+- `suppress_overlap_ms=70 → suppress_units = ceil(70/50) = 2`  — suppress **ROUNDS UP** (and `suppress_units=0` whenever the suppress overlap is 0)
+- `boost_overlap_ms=70    → boost_units    = ceil(70/50) = 2`  — boost **ROUNDS UP** (MET-2256)
+- `handoff_overlap_ms=70  → handoff_units  = floor(70/60) = 1` — handoff, blackout and degrade unit counts stay **FLOORED**
+
+### D. Scoped overlap is a UNION of the two scopes, not their sum (MET-2213)
+Sample window `[200, 500)`. Compacted `(service, all)` interval `[180, 240)`; compacted `(service, max_severity)` interval `[240, 300)`.
+- clip each to the window: `(all) → [200, 240)` length 40; `(severity) → [240, 300)` length 60.
+- union and compact the two clips with the touching-merge rule: `[200, 240)` and `[240, 300)` touch at 240 → they merge into `[200, 300)`.
+- therefore `overlap_ms = 100` and `segment_count = 1` — **not** overlap `40 + 60` with `segment_count = 2`.
+
+### E. Which queue value the sample_signature carries (see `rollup_contract.json` sample_signature payload)
+The signature payload carries `effective_queue_min_ms` — the profile's `queue_min_effective_ms` after the suppress/boost **unit** penalties and credits — then `adjusted_queue_min_ms`, then (after the handoff and blackout unit penalties) `routed_queue_min_ms`, then `dispatch_queue_min_ms`. It does **not** carry `policy_queue_min_ms` (the pre-penalty profile value), even though that value is also emitted as its own row field. Read the exact field list and order from the contract's `sample_signature` payload string.
