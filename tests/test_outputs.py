@@ -1374,6 +1374,10 @@ def test_wrapper_does_not_drop_privileges():
     is the cron drop-in's job, so the wrapper itself must not switch user or drop privileges.
     """
     source = WRAPPER_PATH.read_text()
+    # Strip shell comments first, so a comment that quotes the runbook's own
+    # "must not su/sudo/setpriv/setuid" language is not a false positive; only the wrapper's
+    # executable code must be free of privilege-dropping calls.
+    code = "\n".join(line.split("#", 1)[0] for line in source.splitlines())
     for token in ("su ", "sudo", "setpriv", "runuser", "setuid", "chpst", "gosu"):
-        assert token not in source, f"wrapper must not drop privileges (found {token!r})"
+        assert token not in code, f"wrapper must not drop privileges (found {token!r})"
 
