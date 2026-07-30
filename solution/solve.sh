@@ -40,7 +40,6 @@ cat > /usr/local/bin/rollup-metrics <<'EOF'
 #!/bin/sh
 LOCK=/var/lock/metrics-rollup.lock
 if [ -e "$LOCK" ]; then
-  echo "sample compile blocked by existing lock: $LOCK" >&2
   exit 75
 fi
 exec python3 /app/workflow/metric_rollup.py "$@"

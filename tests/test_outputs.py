@@ -1210,7 +1210,11 @@ def test_wrapper_honors_compile_lock(tmp_path_factory):
             timeout=60,
         )
         assert result.returncode == 75
-        assert not (out_dir / "rollup_summary.json").exists()
+        # The lock branch must be silent on BOTH streams and must write no output file.
+        assert result.stdout == "", f"wrapper wrote to stdout under lock: {result.stdout!r}"
+        assert result.stderr == "", f"wrapper wrote to stderr under lock: {result.stderr!r}"
+        for name in ("rollup_summary.json", "gap_windows.json", "alert_queue.jsonl"):
+            assert not (out_dir / name).exists(), f"wrapper wrote {name} despite the lock"
     finally:
         LOCK_PATH.unlink(missing_ok=True)
 
